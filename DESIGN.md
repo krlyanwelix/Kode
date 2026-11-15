@@ -58,14 +58,24 @@ Rules that keep this honest:
 
 ## Layout
 
-- Three columns: sessions (272px), transcript (fluid), context (306px). Sidebars collapse
-  below 900px; the transcript is the only thing that scrolls, and it scrolls alone.
-- Spacing steps: 4 / 8 / 12 / 16 / 24 / 32. Sections use 1px `--line-soft` rules rather
-  than cards; the only bordered surfaces are inputs, buttons, and the Run status strip.
+- Two panels, not three: a 296px rail and the transcript. Each is a rounded card
+  (16px) on a page-gutter of 12px; the rail holds everything — sessions, run status,
+  branch path, memories, workspace identity — and the transcript is the only thing
+  that scrolls.
+- The rail is graded: title, search, New session and the recent list are always
+  visible. Everything else lives in two disclosure rows — **Session** (status, model,
+  context meter, tools used, path, capabilities) and **Memories** — closed by default.
+  An open group body scrolls inside itself (max 38vh) so the rail never grows past
+  the viewport.
+- Below 1024px the rail narrows to 264px. Below 760px it becomes a drawer that slides
+  over the transcript with a scrim; the workspace is then the only card on screen and
+  "Menu" in the header opens the rail.
+- Spacing steps: 4 / 8 / 12 / 16 / 24 / 32. Group bodies are inset cards
+  (`--panel-soft`, 10px radius) rather than unbounded lists.
 - Message column maxes at 760px, aligned left for the agent and right for the reader.
   Bubbles size to content (no stretched full-width answers for short replies).
-- No decorative icons. Where a glyph used to be, there is either a word (Sessions,
-  Context, Attach, Refresh, Search) or a native control.
+- No decorative icons and no shortcut chrome: buttons say what they do (Menu, Sessions,
+  Attach, Refresh, Search, Close), and key hints live only in the empty state.
 - Everything has a focus ring: `outline: 2px solid var(--accent)` with `outline-offset: 2px`,
   or `box-shadow` on inputs that clip.
 

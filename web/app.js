@@ -396,7 +396,7 @@ async function openSearchHit(row) {
     await selectSession(row.sessionId, row.nodeId);
     return;
   }
-  setDrawer("context", true);
+  openSideGroup($("memory-panel"));
   memoryQueryEl.value = String(row.text || "").slice(0, 60);
   await loadMemories(memoryQueryEl.value);
   memoryQueryEl.focus();
@@ -407,6 +407,12 @@ async function runSearch(query) {
   if (query.length < 2) {
     closeSearch();
     return;
+  }
+  // Answer the keystroke immediately; the panel fills in when the request lands.
+  const panel = $("search-results");
+  if (panel.hidden) {
+    panel.replaceChildren(element("div", "search-empty", `Searching for “${query}”…`));
+    panel.hidden = false;
   }
   try {
     const data = await request(`/api/search?q=${encodeURIComponent(query)}`);
@@ -455,13 +461,9 @@ function notify(message) {
   state.toastTimer = window.setTimeout(() => toast.classList.remove("visible"), 2600);
 }
 
-function setDrawer(name, open) {
-  const sidebar = $("sessions-drawer");
-  const context = $("context-panel");
-  if (name === "sessions") sidebar.classList.toggle("open", open);
-  if (name === "context") context.classList.toggle("open", open);
-  const anyOpen = sidebar.classList.contains("open") || context.classList.contains("open");
-  $("drawer-scrim").classList.toggle("visible", anyOpen);
+function setDrawer(open) {
+  $("sessions-drawer").classList.toggle("open", open);
+  $("drawer-scrim").classList.toggle("visible", open);
 }
 
 function renderSessions() {
@@ -570,7 +572,6 @@ function showEmptyState() {
   const rows = [
     ["Tools", "read · write · edit · glob · grep · bash"],
     ["Context", state.contextLimit ? `${Math.round(state.contextLimit / 1000)}K tokens, compacted on overflow` : "budgeted per turn"],
-    ["Shortcuts", "Ctrl/⌘ K to search · Ctrl/⌘ J for a new session"],
   ];
   for (const [term, detail] of rows) {
     facts.append(element("dt", null, term), element("dd", null, detail));
@@ -835,7 +836,7 @@ async function selectSession(id, preferredNodeId = null) {
   renderSessions();
   await loadNodes(preferredNodeId, { transcript: true });
   sendEl.disabled = false;
-  setDrawer("sessions", false);
+  setDrawer(false);
 }
 
 async function refreshSessions(select = true) {
@@ -1460,13 +1461,9 @@ $("global-search").addEventListener("focus", () => {
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".global-search-wrap")) closeSearch();
 });
-$("mobile-nav-toggle").addEventListener("click", () => setDrawer("sessions", !$("sessions-drawer").classList.contains("open")));
-$("mobile-context-toggle").addEventListener("click", () => setDrawer("context", !$("context-panel").classList.contains("open")));
-$("close-context").addEventListener("click", () => setDrawer("context", false));
-$("drawer-scrim").addEventListener("click", () => {
-  setDrawer("sessions", false);
-  setDrawer("context", false);
-});
+$("mobile-nav-toggle").addEventListener("click", () => setDrawer(!$("sessions-drawer").classList.contains("open")));
+$("mobile-nav-close").addEventListener("click", () => setDrawer(false));
+$("drawer-scrim").addEventListener("click", () => setDrawer(false));
 $("show-tree").addEventListener("click", () => state.sessionId && openTree(state.sessionId));
 $("context-tree").addEventListener("click", () => state.sessionId && openTree(state.sessionId));
 $("fork-session").addEventListener("click", async () => {
@@ -1479,7 +1476,6 @@ $("session-actions").addEventListener("click", (event) => {
   if (state.sessionId) openSessionMenu(event, state.sessionId);
 });
 $("export-session").addEventListener("click", () => exportCurrentSession());
-$("context-export").addEventListener("click", () => exportCurrentSession());
 $("stop").addEventListener("click", () => {
   if (state.controller) {
     state.controller.abort();
@@ -1560,25 +1556,26 @@ request("/api/health").then((health) => {
   $("health-dot").title = "Offline";
 });
 
+function openSideGroup(group) {
+  if (!group) return;
+  group.open = true;
+  group.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+function flashTarget(element) {
+  if (!element) return;
+  element.classList.add("is-target");
+  window.setTimeout(() => element.classList.remove("is-target"), 1200);
+}
 document.querySelectorAll("[data-panel]").forEach((button) => button.addEventListener("click", () => {
   const panel = button.dataset.panel;
   if (panel === "memory") {
-    setDrawer("context", true);
-    memoryPanel.open = true;
+    openSideGroup($("memory-panel"));
     if (!state.memoriesLoaded) loadMemories().catch(() => notify("Memories are unavailable right now."));
     return;
   }
-  const section = document.querySelector(".capability-section");
-  setDrawer("context", true);
-  if (!section) return;
-  section.scrollIntoView({ block: "center", behavior: "smooth" });
-  section.classList.add("is-target");
-  setTimeout(() => section.classList.remove("is-target"), 1200);
+  openSideGroup($("session-group"));
+  flashTarget(button);
 }));
-const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
-const modKey = isMac ? "\u2318" : "Ctrl";
-$("search-kbd").textContent = `${modKey} K`;
-$("new-session-kbd").textContent = `${modKey} J`;
 document.addEventListener("keydown", (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
     event.preventDefault();
@@ -1589,8 +1586,7 @@ document.addEventListener("keydown", (event) => {
     $("new-session").click();
   }
   if (event.key === "Escape") {
-    setDrawer("sessions", false);
-    setDrawer("context", false);
+    setDrawer(false);
   }
 });
 $("session-form").addEventListener("submit", async (event) => {

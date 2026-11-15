@@ -10,37 +10,60 @@
   </head>
   <body>
     <main class="app-shell">
-      <header class="globalbar">
-        <a class="brand" href="/" aria-label="Kode home"><span class="brand-name">Kode</span></a>
+      <aside class="sidebar" id="sessions-drawer" aria-label="Workspace">
+        <div class="sidebar-head">
+          <a class="brand" href="/" aria-label="Kode home"><span class="brand-name">Kode</span></a>
+          <button class="icon-button sidebar-close" id="mobile-nav-close" type="button" aria-label="Close sidebar">Close</button>
+        </div>
+
         <div class="global-search-wrap">
-          <input id="global-search" type="search" placeholder="Search sessions, messages and memories" aria-label="Search sessions, messages and memories" autocomplete="off" />
-          <kbd id="search-kbd">⌘ K</kbd>
+          <input id="global-search" type="search" placeholder="Search" aria-label="Search sessions, messages and memories" autocomplete="off" />
           <div id="search-results" class="search-results" role="listbox" aria-label="Search results" hidden></div>
         </div>
-        <div class="global-tools">
-          <button class="icon-button mobile-nav-trigger" id="mobile-nav-toggle" type="button" aria-label="Open sessions">Sessions</button>
-          <span class="health-indicator"><i id="health-dot" class="status-dot"></i><span id="health-text">Connecting…</span></span>
-          <span class="model-indicator"><i></i><span id="model-name">Model</span></span>
-          <button class="icon-button mobile-context-trigger" id="mobile-context-toggle" type="button" aria-label="Open context">Context</button>
-        </div>
-      </header>
 
-      <aside class="sidebar" id="sessions-drawer" aria-label="Workspace navigation">
-        <button id="new-session" class="new-session" type="button">New session <kbd id="new-session-kbd">⌘ J</kbd></button>
-        <div class="sidebar-section-heading"><span>Recent sessions</span><button id="refresh" class="quiet-button" type="button" title="Refresh sessions">Refresh</button></div>
+        <button id="new-session" class="new-session" type="button">New session</button>
+
+        <div class="sidebar-section-heading"><span>Recent</span><button id="refresh" class="quiet-button" type="button" title="Refresh sessions">Refresh</button></div>
         <div id="sessions" class="sessions" aria-label="Sessions"></div>
-        <div class="workspace-links">
-          <div class="sidebar-section-heading"><span>Workspace</span></div>
-          <button class="nav-item" type="button" data-panel="skills">Skills</button>
-          <button class="nav-item" type="button" data-panel="tools">Tools</button>
-          <button class="nav-item" type="button" data-panel="memory">Long-term memory</button>
+
+        <div class="sidebar-groups">
+          <details class="side-group" id="session-group">
+            <summary><span>Session</span></summary>
+            <div class="side-group-body">
+              <div class="run-status" id="run-status" data-state="idle"><span><strong id="run-status-title">Ready to work</strong><small id="run-status-detail">Kode is available</small></span></div>
+              <div class="run-detail"><span>Model</span><strong id="run-model">—</strong></div>
+              <div class="run-detail"><span>Context</span><strong id="run-context">—</strong></div>
+              <div class="context-meter" id="context-meter" role="img" aria-label="Context usage"><span id="context-meter-fill"></span></div>
+              <div class="run-detail"><span>Tools used</span><strong id="tool-count">—</strong></div>
+              <div class="side-divider"></div>
+              <div class="side-group-title"><h3>Path</h3><button class="text-link" id="context-tree" type="button">View tree</button></div>
+              <div class="path-list" id="path-list"><div class="path-entry"><span><strong>Current conversation</strong><small>main branch</small></span></div></div>
+              <div class="side-divider"></div>
+              <button class="capability-row" type="button" data-panel="skills"><strong>Skills</strong><small>Available for this session</small></button>
+              <button class="capability-row" type="button" data-panel="tools"><strong>Tools</strong><small>Connected to your agent</small></button>
+            </div>
+          </details>
+
+          <details class="side-group" id="memory-panel">
+            <summary><span>Memories</span><span class="memory-count" id="memory-count">–</span></summary>
+            <div class="side-group-body">
+              <div class="memory-toolbar"><span>Relevant to this workspace</span><button class="text-link" id="refresh-memories" type="button">Refresh</button></div>
+              <form id="memory-search" class="memory-search"><input id="memory-query" type="search" placeholder="Search memories" aria-label="Search memories" /><button type="submit" class="text-link" aria-label="Search memories">Search</button></form>
+              <div id="memories" class="memories"><div class="memory-empty">Memories appear here when available.</div></div>
+            </div>
+          </details>
         </div>
-        <div class="sidebar-foot"><span><strong id="workspace-name">Workspace</strong><small>Local project</small></span></div>
+
+        <div class="sidebar-foot">
+          <span><strong id="workspace-name">Workspace</strong><small>Local project</small></span>
+          <span class="health-indicator"><i id="health-dot" class="status-dot"></i><span id="health-text">Connecting…</span><span id="model-name" class="foot-model">Model</span></span>
+        </div>
       </aside>
 
       <section class="workspace" aria-label="Conversation workspace">
         <header class="topbar">
           <div class="conversation-heading">
+            <button class="icon-button mobile-only" id="mobile-nav-toggle" type="button" aria-label="Open sidebar">Menu</button>
             <div class="breadcrumb"><span>Sessions</span><span class="breadcrumb-sep">/</span><h1 id="session-title" class="session-title">Loading session…</h1></div>
             <div class="meta-line"><span id="session-meta">Ready</span><span class="meta-divider"></span><span id="session-path">main branch</span></div>
           </div>
@@ -57,28 +80,12 @@
           <textarea id="input" rows="1" placeholder="Ask Kode…" aria-label="Message Kode"></textarea>
           <div id="attachments" class="attachments" hidden></div>
           <div class="composer-footer">
-            <div class="composer-tools"><button id="attach-file" class="text-link" type="button">Attach</button><input id="attachment-input" class="sr-only" type="file" tabindex="-1" aria-hidden="true" /><label class="tool-toggle" title="Allow file changes and shell commands; turn off to keep workspace access read-only"><input id="allow-tools" type="checkbox" checked /><span>Allow changes</span></label><span class="composer-hint">Enter to send · Shift + Enter for a new line</span></div>
+            <div class="composer-tools"><button id="attach-file" class="text-link" type="button">Attach</button><input id="attachment-input" class="sr-only" type="file" tabindex="-1" aria-hidden="true" /><label class="tool-toggle" title="Allow file changes and shell commands; turn off to keep workspace access read-only"><input id="allow-tools" type="checkbox" checked /><span>Allow changes</span></label></div>
             <div class="composer-submit"><span class="composer-model"><span id="composer-model-name">Model</span></span><button id="stop" class="send-button stop" type="button" hidden>Stop</button><button id="send" class="send-button" type="submit">Send</button></div>
           </div>
         </form>
         <p class="composer-disclaimer">Kode can make mistakes. Review important changes before applying them.</p>
       </section>
-
-      <aside class="context-sidebar" id="context-panel" aria-label="Session context">
-        <div class="context-header"><div><h2>Context</h2></div><button class="icon-button context-close" id="close-context" type="button" aria-label="Close context">×</button></div>
-        <section class="context-section path-section"><div class="context-section-title"><h3>Session path</h3><button class="text-link" id="context-tree" type="button">View tree</button></div><div class="path-list" id="path-list"><div class="path-entry"><span class="path-node current"></span><span><strong>Current conversation</strong><small>main branch</small></span></div></div></section>
-        <section class="context-section run-section"><div class="context-section-title"><h3>Run status</h3></div><div class="run-status" id="run-status" data-state="idle"><span><strong id="run-status-title">Ready to work</strong><small id="run-status-detail">Agent is available</small></span></div><div class="run-detail"><span>Model</span><strong id="run-model">—</strong></div><div class="run-detail"><span>Context</span><strong id="run-context">—</strong></div><div class="context-meter" id="context-meter" role="img" aria-label="Context usage"><span id="context-meter-fill"></span></div><div class="run-detail"><span>Tools used</span><strong id="tool-count">—</strong></div></section>
-        <section class="context-section capability-section"><div class="context-section-title"><h3 title="Skills live in skills/, tools in tools/">Capabilities</h3></div><div class="capability-row"><span><strong>Skills</strong><small>Available for this session</small></span></div><div class="capability-row"><span><strong>Tools</strong><small>Connected to your agent</small></span></div></section>
-        <details id="memory-panel" class="memory-section" open>
-          <summary><span class="summary-title">Memories in context</span><span class="memory-count" id="memory-count">–</span><span class="memory-chevron"></span></summary>
-          <div class="memory-panel-body">
-            <div class="memory-toolbar"><span>Relevant to this workspace</span><button class="text-link" id="refresh-memories" type="button">Refresh</button></div>
-            <form id="memory-search" class="memory-search"><input id="memory-query" type="search" placeholder="Search memories" aria-label="Search memories" /><button type="submit" class="text-link" aria-label="Search memories">Search</button></form>
-            <div id="memories" class="memories"><div class="memory-empty">Memories appear here when available.</div></div>
-          </div>
-        </details>
-        <button class="context-bottom-link" id="context-export" type="button">Export conversation</button>
-      </aside>
       <button id="drawer-scrim" class="drawer-scrim" type="button" aria-label="Close navigation"></button>
     </main>
 

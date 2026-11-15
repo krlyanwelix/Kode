@@ -249,8 +249,13 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
       ...hit,
       sessionName: byId.get(hit.sessionId)?.displayName ?? "Session",
     }));
+    // Memory recall can queue behind a cold sidecar; never hold the whole search
+    // response hostage to it — session and message hits are already in hand.
     const memoryHits = memoryAvailable
-      ? (await memory.recall(query, { limit: 4 })).map((hit) => ({ id: hit.id, text: hit.text, score: hit.score }))
+      ? (await Promise.race([
+          memory.recall(query, { limit: 4 }),
+          new Promise<never[]>((resolve) => setTimeout(() => resolve([]), 1200)),
+        ])).map((hit) => ({ id: hit.id, text: hit.text, score: hit.score }))
       : [];
     json(res, 200, { query, sessions: sessionHits, messages: messageHits, memories: memoryHits });
     return true;
