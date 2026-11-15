@@ -23,6 +23,8 @@ function objectArgs(args: unknown): Record<string, unknown> {
 }
 
 export const tool: Tool = {
+  capabilities: ["network"],
+  readOnly: true,
   definition: {
     name: "exa_search",
     description: "Search the web with Exa and return relevant current pages, titles, URLs, and excerpts.",

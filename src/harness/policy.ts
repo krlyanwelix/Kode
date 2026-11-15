@@ -8,7 +8,10 @@
  * delete the workspace.
  */
 
-export type Capability = "fs.read" | "fs.write" | "shell" | "network" | "git.write";
+import type { Capability } from "../types.js";
+export type { Capability } from "../types.js";
+
+export const ALL_CAPABILITIES: Capability[] = ["fs.read", "fs.write", "shell", "network", "git.write"];
 
 export type Risk = "low" | "medium" | "high";
 
@@ -149,6 +152,11 @@ export function assessCommand(command: string): CommandAssessment {
 
 const PROTECTED_DEFAULT = [/^\.env(?:\.|$)/i, /(?:^|[\\/])\.env(?:\.|$)/i, /(?:^|[\\/])\.git[\\/]/i, /\.pem$|\.key$|id_rsa/i];
 
+const BUILTIN_CAPABILITIES: Record<string, Capability[]> = {
+  read: ["fs.read"], glob: ["fs.read"], grep: ["fs.read"], load_skill: ["fs.read"],
+  write: ["fs.write"], edit: ["fs.write"], bash: ["shell"],
+};
+
 function pathOf(args: unknown): string | undefined {
   if (typeof args !== "object" || args === null) return undefined;
   const path = (args as { path?: unknown }).path;
@@ -167,24 +175,29 @@ export function evaluateToolCall(
   toolName: string,
   args: unknown,
   options: PolicyOptions = {},
+  declaredCapabilities?: Capability[],
 ): PolicyDecision {
-  const allowed = new Set<Capability>(options.allowedCapabilities ?? ["fs.read", "fs.write", "shell", "network", "git.write"]);
+  const allowed = new Set<Capability>(options.allowedCapabilities ?? ALL_CAPABILITIES);
   const autoApprove = options.autoApproveRisk ?? "never";
   const protectedPaths = options.protectedPaths ?? PROTECTED_DEFAULT;
+  const command = typeof args === "object" && args !== null ? String((args as { command?: unknown }).command ?? "") : "";
+  const assessment = toolName === "bash" ? assessCommand(command) : undefined;
+  const needed = [...new Set([
+    ...(BUILTIN_CAPABILITIES[toolName] ?? declaredCapabilities ?? ALL_CAPABILITIES),
+    ...(declaredCapabilities ?? []),
+    ...(assessment?.capabilities ?? []),
+  ])];
+  const missing = needed.filter((capability) => !allowed.has(capability));
+  if (missing.length > 0) {
+    return {
+      decision: "deny",
+      reason: `tool needs ${missing.join(", ")}, which this session does not allow`,
+      risk: assessment?.risk ?? "medium",
+      capabilities: needed,
+    };
+  }
 
-  if (toolName === "bash") {
-    const command = typeof args === "object" && args !== null ? String((args as { command?: unknown }).command ?? "") : "";
-    const assessment = assessCommand(command);
-    const needed = ["shell", ...assessment.capabilities] as Capability[];
-    const missing = needed.filter((capability) => !allowed.has(capability));
-    if (missing.length > 0) {
-      return {
-        decision: "deny",
-        reason: `command needs ${missing.join(", ")}, which this session does not allow`,
-        risk: assessment.risk,
-        capabilities: assessment.capabilities,
-      };
-    }
+  if (assessment) {
     const reason = assessment.reasons.length > 0 ? assessment.reasons.join("; ") : undefined;
     if (autoApprove !== "never" && riskAtLeast(autoApprove, assessment.risk)) {
       return { decision: "allow", reason, risk: assessment.risk, capabilities: assessment.capabilities };
@@ -193,9 +206,6 @@ export function evaluateToolCall(
   }
 
   if (toolName === "write" || toolName === "edit") {
-    if (!allowed.has("fs.write")) {
-      return { decision: "deny", reason: "file writes are disabled in this session", risk: "medium", capabilities: ["fs.write"] };
-    }
     const path = pathOf(args);
     if (path && protectedPaths.some((pattern) => pattern.test(path))) {
       return { decision: "ask", reason: "path is protected", risk: "medium", capabilities: ["fs.write"] };
@@ -203,7 +213,7 @@ export function evaluateToolCall(
     return { decision: "allow", risk: "low", capabilities: ["fs.write"] };
   }
 
-  return { decision: "allow", risk: "low", capabilities: [] };
+  return { decision: "allow", risk: "low", capabilities: needed };
 }
 
 /** Short label for a decision, used in trace records and error results. */

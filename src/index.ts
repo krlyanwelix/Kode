@@ -10,6 +10,7 @@ import { memoryFromEnv, recallMemoryBlock, summarizeTurn } from "./memory/index.
 import { buildSystemPrompt } from "./prompt.js";
 import { policyFromEnv, verificationFromEnv } from "./harness/config.js";
 import { traceFromEnv } from "./harness/trace.js";
+import { TaskExecution } from "./execution/task.js";
 
 const { model, settings: modelSettings } = (() => {
   try {
@@ -131,16 +132,18 @@ if (nodes.length > 0) {
 }
 if (currentNodeId) sessionStore.closePendingTurns(sessionId);
 const history = currentNodeId ? sessionStore.getPath(currentNodeId) : [];
+const execution = new TaskExecution(loadedTools);
+const verification = verificationFromEnv();
 const agent = new Agent({
   model,
-  tools: loadedTools,
+  tools: execution.tools,
   history,
   context: contextOptions,
   modelTimeoutMs: modelSettings.timeoutMs,
   streamIdleTimeoutMs: modelSettings.streamIdleTimeoutMs,
   systemPrompt: buildSystemPrompt(modelSettings.model, skills),
   policy: policyFromEnv(),
-  verification: verificationFromEnv(),
+  verification: verification ? { ...verification, ...(execution.docker ? { execute: execution.verify } : {}) } : undefined,
   trace: traceFromEnv(),
   statusBar: process.env.AGENT_STATUS_BAR !== "0",
   confirmToolCall: async (toolCall) => {
@@ -213,7 +216,7 @@ while (true) {
     let streamedText = false;
     const turnMessages: Array<{ role: string; content: string }> = [{ role: "user", content: input }];
     activeController = new AbortController();
-    for await (const event of agent.run(input, { context: memoryContext, signal: activeController.signal })) {
+    for await (const event of execution.run(agent, input, { context: memoryContext, signal: activeController.signal })) {
       if (event.type === "text_delta") {
         stdout.write(event.text);
         streamedText = true;
@@ -222,6 +225,7 @@ while (true) {
         if (event.message.content !== null) assistantContent = event.message.content;
       }
       if (event.type === "tool_start") console.log(`\n[tool] ${event.toolCall.function.name}`);
+      if (event.type === "warning") console.warn(`\n${event.message}`);
       if (event.type === "tool_end") {
         usedToolNames.push(event.toolCall.function.name);
         console.log(`[result] ${event.result}`);

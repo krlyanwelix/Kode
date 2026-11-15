@@ -1334,7 +1334,7 @@ async function sendMessage(event) {
           assistantMessage.finishTool(data.toolCall, data.result);
           setRunStatus("working", "Working", "Reading the tool result");
           if (typeof data.result === "string" && data.result.startsWith("Tool execution cancelled")) {
-            assistantMessage.notice("This tool needs permission and was denied. Turn on “Run commands” above the input and try again.");
+            assistantMessage.notice("This tool needs permission and was denied. Turn on “Allow changes” above the input and try again.");
           }
         } else if (data.type === "warning") {
           assistantMessage.notice(data.message);

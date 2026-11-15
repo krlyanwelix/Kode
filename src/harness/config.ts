@@ -1,4 +1,4 @@
-import type { Capability, PolicyOptions, Risk } from "./policy.js";
+import { ALL_CAPABILITIES, type Capability, type PolicyOptions, type Risk } from "./policy.js";
 import type { VerifyCheck } from "./verify.js";
 
 /**
@@ -9,7 +9,6 @@ import type { VerifyCheck } from "./verify.js";
  * so "it worked in the terminal" also holds in the browser.
  */
 
-const CAPABILITIES: Capability[] = ["fs.read", "fs.write", "shell", "network", "git.write"];
 const RISKS: Risk[] = ["low", "medium", "high"];
 
 function list(value: string | undefined): string[] {
@@ -27,13 +26,25 @@ function list(value: string | undefined): string[] {
  */
 export function policyFromEnv(env: NodeJS.ProcessEnv = process.env): PolicyOptions {
   const allowed = list(env.AGENT_CAPABILITIES).filter((name): name is Capability =>
-    (CAPABILITIES as string[]).includes(name),
+    (ALL_CAPABILITIES as string[]).includes(name),
   );
   const rawAuto = env.AGENT_AUTO_APPROVE_RISK?.trim().toLowerCase();
   const autoApproveRisk = rawAuto && rawAuto !== "never" && (RISKS as string[]).includes(rawAuto) ? (rawAuto as Risk) : "never";
   return {
-    ...(allowed.length > 0 ? { allowedCapabilities: allowed } : {}),
+    ...(env.AGENT_CAPABILITIES !== undefined ? { allowedCapabilities: allowed } : {}),
     autoApproveRisk,
+  };
+}
+
+/** The browser toggle can narrow the server's policy, never grant missing capabilities. */
+export function webPolicyFromEnv(allowChanges: boolean, env: NodeJS.ProcessEnv = process.env): PolicyOptions {
+  const policy = policyFromEnv(env);
+  const enabled = allowChanges && env.WEB_ALLOW_TOOLS !== "0";
+  const allowed = policy.allowedCapabilities ?? ALL_CAPABILITIES;
+  return {
+    ...policy,
+    allowedCapabilities: enabled ? allowed : allowed.filter((capability) => capability === "fs.read" || capability === "network"),
+    autoApproveRisk: enabled ? "high" : "never",
   };
 }
 

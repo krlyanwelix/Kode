@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -27,7 +28,7 @@ import (
 )
 
 const (
-	maxBodyBytes   = 1 << 20  // 1 MiB
+	maxBodyBytes   = 24 << 20 // accommodates a 16 MiB file encoded as base64
 	maxFileBytes   = 16 << 20 // 16 MiB
 	maxOutputBytes = 512 << 10
 	defaultTimeout = 120 * time.Second
@@ -233,7 +234,7 @@ func runCommand(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			err = cmd.Start()
 			if err == nil {
-				runStream(stream, cmd, stdout, stderr, timeout)
+				runStream(r.Context(), stream, cmd, stdout, stderr, timeout)
 				return
 			}
 		}
@@ -242,7 +243,16 @@ func runCommand(w http.ResponseWriter, r *http.Request) {
 	stream.send("exit", map[string]any{"code": 127, "error": err.Error()})
 }
 
-func runStream(stream *eventStream, cmd *exec.Cmd, stdout io.ReadCloser, stderr io.ReadCloser, timeout time.Duration) {
+func runStream(ctx context.Context, stream *eventStream, cmd *exec.Cmd, stdout io.ReadCloser, stderr io.ReadCloser, timeout time.Duration) {
+	finished := make(chan struct{})
+	defer close(finished)
+	go func() {
+		select {
+		case <-ctx.Done():
+			killCommand(cmd)
+		case <-finished:
+		}
+	}()
 	var timedOut atomic.Bool
 	stream.onLimit = func() {
 		stream.send("stderr", map[string]string{"chunk": "\nexecd: output limit reached, process killed\n"})
@@ -377,6 +387,7 @@ func readFile(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"path":     query.Get("path"),
 			"size":     len(content),
+			"mode":     uint32(info.Mode().Perm()),
 			"encoding": "base64",
 			"content":  base64.StdEncoding.EncodeToString(content),
 		})
@@ -389,6 +400,7 @@ func readFile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"path":     query.Get("path"),
 		"size":     len(content),
+		"mode":     uint32(info.Mode().Perm()),
 		"encoding": "utf-8",
 		"content":  string(content),
 	})
@@ -488,9 +500,13 @@ func listDirectory(w http.ResponseWriter, r *http.Request) {
 		}
 		kind := "file"
 		size := info.Size()
-		if item.IsDir() {
+		if item.Type()&os.ModeSymlink != 0 {
+			kind = "symlink"
+		} else if item.IsDir() {
 			kind = "directory"
 			size = 0
+		} else if !info.Mode().IsRegular() {
+			kind = "special"
 		}
 		result = append(result, entry{Name: item.Name(), Type: kind, Size: size, MtimeMs: info.ModTime().UnixMilli()})
 	}

@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Agent } from "./agent.js";
+import { policyFromEnv, webPolicyFromEnv } from "./harness/config.js";
+import { evaluateToolCall } from "./harness/policy.js";
 import type { AgentEvent, Message, Model, Tool, ToolDefinition } from "./types.js";
 
 /** Model double that returns scripted assistant messages and records every prompt. */
@@ -22,6 +24,125 @@ async function drain(events: AsyncGenerator<AgentEvent>): Promise<AgentEvent[]> 
   for await (const event of events) collected.push(event);
   return collected;
 }
+
+test("verification rechecks repaired answers and refuses an exhausted failing gate", async () => {
+  for (const repaired of [true, false]) {
+    let checks = 0;
+    const agent = new Agent({
+      model: new ScriptedModel([{ role: "assistant", content: "done" }, { role: "assistant", content: "repaired" }]),
+      tools: [], systemPrompt: "sys",
+      verification: {
+        checks: [{ name: "test", command: "unused" }], maxAttempts: 1,
+        execute: async () => [{ name: "test", pass: ++checks > 1 && repaired, output: "check" }],
+      },
+    });
+    const events = await drain(agent.run("fix"));
+    assert.equal(checks, 2);
+    const end = events.find((event) => event.type === "agent_end");
+    assert.ok(end?.type === "agent_end");
+    if (repaired) assert.equal(end.message.content, "repaired");
+    else assert.match(end.message.content!, /^\[harness\] Verification still failed/);
+  }
+});
+
+test("web read-only policy blocks mutations even when confirmation would approve them", async () => {
+  for (const policy of [webPolicyFromEnv(false, {}), webPolicyFromEnv(true, { WEB_ALLOW_TOOLS: "0" })]) {
+    const executed: string[] = [];
+    let confirmations = 0;
+    const names = ["read", "write", "edit", "bash", "external_write", "undeclared"];
+    const tools: Tool[] = names.map((name) => ({
+      definition: { name, description: name, parameters: {} },
+      ...(name === "external_write" ? { capabilities: ["fs.write" as const] } : {}),
+      async execute() { executed.push(name); return "ok"; },
+    }));
+    const model = new ScriptedModel([
+      { role: "assistant", content: null, tool_calls: names.map((name) => ({
+        id: name, type: "function" as const, function: { name, arguments: "{}" },
+      })) },
+    ]);
+    const agent = new Agent({
+      model, tools, policy, systemPrompt: "sys", statusBar: false,
+      confirmToolCall: async () => { confirmations++; return true; },
+    });
+    const events = await drain(agent.run("inspect"));
+    assert.deepEqual(executed, ["read"]);
+    assert.equal(confirmations, 0);
+    const results = events.filter((event) => event.type === "tool_end");
+    assert.equal(results.length, names.length);
+    for (const event of results.slice(1)) assert.match(event.result, /policy denied/);
+  }
+});
+
+test("browser approval never expands server capabilities, including an empty or invalid list", () => {
+  for (const value of ["fs.read", "", "typo"]) {
+    const env = { AGENT_CAPABILITIES: value };
+    const policy = webPolicyFromEnv(true, env);
+    assert.equal(evaluateToolCall("write", {}, policy).decision, "deny");
+    assert.equal(evaluateToolCall("bash", { command: "echo hi" }, policy).decision, "deny");
+    assert.equal(evaluateToolCall("read", {}, policy).decision, value === "fs.read" ? "allow" : "deny");
+  }
+  assert.equal(policyFromEnv({}).allowedCapabilities, undefined);
+  const readOnly = webPolicyFromEnv(false, {});
+  assert.equal(evaluateToolCall("search", {}, readOnly, ["network"]).decision, "allow");
+  assert.equal(evaluateToolCall("search", {}, webPolicyFromEnv(true, { AGENT_CAPABILITIES: "fs.read" }), ["network"]).decision, "deny");
+  // A declaration cannot remove the mandatory capability of a built-in tool.
+  assert.equal(evaluateToolCall("write", {}, readOnly, []).decision, "deny");
+});
+
+test("mutations form barriers between parallel reads and preserve both edits", async () => {
+  let content = "alpha beta";
+  const read: Tool = {
+    readOnly: true,
+    definition: { name: "read", description: "read", parameters: {} },
+    async execute() {
+      const snapshot = content;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      assert.equal(content, snapshot, "a mutation overlapped a read");
+      return snapshot;
+    },
+  };
+  const edit: Tool = {
+    definition: { name: "edit", description: "edit", parameters: {} },
+    async execute(args) {
+      const { oldText, newText } = args as { oldText: string; newText: string };
+      const snapshot = content;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      content = snapshot.replace(oldText, newText);
+      return content;
+    },
+  };
+  const calls = [
+    { name: "read", arguments: "{}" },
+    { name: "edit", arguments: '{"oldText":"alpha","newText":"one"}' },
+    { name: "edit", arguments: '{"oldText":"beta","newText":"two"}' },
+    { name: "read", arguments: "{}" },
+  ];
+  const model = new ScriptedModel([
+    { role: "assistant", content: null, tool_calls: calls.map((call, index) => ({ id: String(index), type: "function", function: call })) },
+    { role: "assistant", content: "done" },
+  ]);
+  await drain(new Agent({ model, tools: [read, edit], systemPrompt: "sys", statusBar: false }).run("edit"));
+  assert.equal(content, "one two");
+  assert.deepEqual(model.calls[1]!.filter((message) => message.role === "tool").map((message) => message.content),
+    ["alpha beta", "one beta", "one two", "one two"]);
+});
+
+test("cancelling a mutation does not start queued commands or external tools", async () => {
+  const controller = new AbortController();
+  const executed: string[] = [];
+  const tools: Tool[] = ["write", "bash", "external"].map((name) => ({
+    definition: { name, description: name, parameters: {} },
+    async execute() { executed.push(name); controller.abort(); return "ok"; },
+  }));
+  const model = new ScriptedModel([
+    { role: "assistant", content: null, tool_calls: tools.map((tool) => ({
+      id: tool.definition.name, type: "function", function: { name: tool.definition.name, arguments: "{}" },
+    })) },
+  ]);
+  const events = await drain(new Agent({ model, tools, systemPrompt: "sys", confirmToolCall: async () => true }).run("go", { signal: controller.signal }));
+  assert.deepEqual(executed, ["write"]);
+  assert.ok(events.some((event) => event.type === "aborted"));
+});
 
 test("the loop executes a tool call and feeds the result back to the model", async () => {
   const echo: Tool = {
@@ -248,6 +369,7 @@ test("two failures in a row add a change-approach hint", async () => {
 test("tool calls in one step run concurrently but report in call order", async () => {
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
   const slow: Tool = {
+    readOnly: true,
     definition: { name: "slow", description: "Waits.", parameters: { type: "object", properties: {} } },
     async execute() {
       await sleep(120);
@@ -255,6 +377,7 @@ test("tool calls in one step run concurrently but report in call order", async (
     },
   };
   const fast: Tool = {
+    readOnly: true,
     definition: { name: "fast", description: "Answers at once.", parameters: { type: "object", properties: {} } },
     async execute() {
       await sleep(10);

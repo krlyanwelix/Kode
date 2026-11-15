@@ -74,6 +74,7 @@ export async function discoverSkills(directory = resolve(process.cwd(), "skills"
 export function createSkillLoaderTool(skills: SkillSummary[]): Tool {
   const byName = new Map(skills.map((skill) => [skill.name.toLowerCase(), skill]));
   return {
+    readOnly: true,
     definition: {
       name: "load_skill",
       description: "Load the full instructions for one discovered skill when it is relevant to the current task.",

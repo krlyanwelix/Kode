@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { Agent } from "../src/agent.js";
+import { TaskExecution } from "../src/execution/task.js";
 import { setWorkspaceRoot, tools } from "../src/tools.js";
 import { createModel, describeModel } from "../src/model-config.js";
 import { buildSystemPrompt } from "../src/prompt.js";
@@ -158,10 +159,11 @@ export async function runEval(options: RunOptions): Promise<RunSummary> {
       writeSeed(sandbox, seed);
 
       setWorkspaceRoot(sandbox);
+      const execution = new TaskExecution(tools, { root: sandbox });
       const trace = new TraceRecorder(resolve(runDir, "traces", `${task.id}-${attempt}.jsonl`), `${task.id}-${attempt}`);
       const agent = new Agent({
         model,
-        tools,
+        tools: execution.tools,
         systemPrompt,
         maxTurns: options.maxTurns ?? 20,
         // Unattended runs: every tool call is pre-approved.
@@ -178,7 +180,7 @@ export async function runEval(options: RunOptions): Promise<RunSummary> {
 
       let runError = "";
       try {
-        for await (const event of agent.run(task.prompt)) {
+        for await (const event of execution.run(agent, task.prompt)) {
           if (event.type === "tool_start") {
             toolCalls.push(event.toolCall.function.name);
           } else if (event.type === "tool_end") {

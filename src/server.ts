@@ -10,8 +10,9 @@ import { createSkillLoaderTool, discoverSkills, loadExternalTools } from "./load
 import { memoryFromEnv, recallMemoryBlock, summarizeTurn } from "./memory/index.js";
 import type { Message } from "./types.js";
 import { buildSystemPrompt } from "./prompt.js";
-import { policyFromEnv, verificationFromEnv } from "./harness/config.js";
+import { webPolicyFromEnv, verificationFromEnv } from "./harness/config.js";
 import { traceFromEnv } from "./harness/trace.js";
+import { TaskExecution } from "./execution/task.js";
 
 const projectRoot = resolve(process.cwd());
 const webRoot = join(projectRoot, "web");
@@ -79,22 +80,21 @@ function systemPrompt(): string {
   return buildSystemPrompt(modelSettings.model, skills);
 }
 
-function createAgent(history: Message[], allowTools: boolean): Agent {
+function createAgent(history: Message[], allowTools: boolean, execution: TaskExecution): Agent {
+  const policy = webPolicyFromEnv(allowTools);
+  const verification = policy.allowedCapabilities?.includes("shell") ? verificationFromEnv() : undefined;
   return new Agent({
     model,
-    tools: loadedTools,
+    tools: execution.tools,
     history,
     context: { maxInputTokens: contextLimit },
     systemPrompt: systemPrompt(),
     modelTimeoutMs: modelSettings.timeoutMs,
     streamIdleTimeoutMs: modelSettings.streamIdleTimeoutMs,
-    // The web UI has no terminal prompt, so the browser decides per request whether
-    // commands may run (the composer toggle) and the server can force-deny with WEB_ALLOW_TOOLS=0.
+    // The toggle grants file changes and commands within the server's capability policy.
     confirmToolCall: async () => allowTools,
-    // In the browser there is nobody to answer a second prompt: the per-request
-    // toggle already grants shell, so auto-approve the policy's "ask" decisions.
-    policy: { ...policyFromEnv(), autoApproveRisk: allowTools ? "high" : "never" },
-    verification: verificationFromEnv(),
+    policy,
+    verification: verification ? { ...verification, ...(execution.docker ? { execute: execution.verify } : {}) } : undefined,
     trace: traceFromEnv(),
   });
 }
@@ -121,7 +121,9 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
   const memoryContext = memoryAvailable
     ? await recallMemoryBlock(memory, prompt, memoryBudgetChars)
     : undefined;
-  const agent = createAgent(history, input.allowTools !== false && process.env.WEB_ALLOW_TOOLS !== "0");
+  const allowChanges = input.allowTools !== false && process.env.WEB_ALLOW_TOOLS !== "0";
+  const execution = new TaskExecution(loadedTools, { allowChanges });
+  const agent = createAgent(history, allowChanges, execution);
   const turnMessages: Array<{ role: string; content: string }> = [{ role: "user", content: prompt }];
   const toolNames: string[] = [];
   const toolResults: Array<{ name: string; output: string }> = [];
@@ -142,7 +144,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
   });
   sse(res, { type: "start", sessionId, nodeId: currentNodeId });
   try {
-    for await (const event of agent.run(prompt, { context: memoryContext, signal: controller.signal })) {
+    for await (const event of execution.run(agent, prompt, { context: memoryContext, signal: controller.signal })) {
       if (event.type === "message_end") {
         if (event.message.content !== null) assistantContent = event.message.content;
       } else if (event.type === "tool_end") {

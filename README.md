@@ -10,7 +10,7 @@
 
 ## 特性
 
-- **Agent 循环**：流式输出、同一轮并行调用多个工具、20 轮上限优雅收尾、完全重复的调用直接拦截、连续失败自动收敛。
+- **Agent 循环**：流式输出、只读工具并行，修改与命令按调用顺序执行、20 轮上限优雅收尾、完全重复的调用直接拦截、连续失败自动收敛。
 - **上下文管理**：按轮切分历史，超预算时把早期轮次压成摘要；长工具结果截断，完整内容落 `data/tool-output/`。
 - **会话树**（SQLite）：从任意 turn 续聊或分叉（`r<number>` / `f<number>`），崩溃留下的未完成 turn 自动收尾。
 - **内置工具**：`read` / `write` / `edit` / `glob` / `grep` / `bash`；路径经真实路径校验防逃逸；Windows 自动探测 Git Bash；超时与输出上限保护。
@@ -62,7 +62,7 @@ MODEL=deepseek-flash
 | `GIT_BASH_PATH` | 自动 | 自动探测不准时指定 bash.exe |
 | `SESSION_DB` | `data/agent.sqlite` | 会话数据库 |
 | `AGENT_TOOLS_DIR` / `AGENT_SKILLS_DIR` | `tools` / `skills` | 外部工具与技能目录 |
-| `AGENT_CAPABILITIES` | 全部 | 逗号分隔的能力白名单：`fs.read,fs.write,shell,network,git.write` |
+| `AGENT_CAPABILITIES` | 全部 | 逗号分隔的能力白名单：`fs.read,fs.write,shell,network,git.write`；显式留空表示禁用全部能力 |
 | `AGENT_AUTO_APPROVE_RISK` | `never` | 自动放行的最高风险：`low` / `medium` / `high` |
 | `AGENT_STATUS_BAR` | `true` | 是否在工具结果末尾追加 `[harness]` 状态行 |
 | `AGENT_VERIFY_CHECKS` | 空 | 验证命令，`;;` 分隔的 `name=command`，如 `test=npm test;;lint=npx eslint .` |
@@ -107,6 +107,7 @@ src/
     format.ts       召回块格式化（字符预算）
     policy.ts       写入过滤、轮次摘要
     redact.ts       密钥脱敏（与服务端同一套规则）
+  execution/        local / docker 任务执行、工具适配与工作区同步
   context.ts        token 估算、历史压缩、工具结果截断
   tokens.ts         token 估算工具函数
   session-store.ts  SQLite 会话树
@@ -148,7 +149,8 @@ PORT=8080 npm run dev:web
 - 空会话给出当前工作区的事实（可用工具、上下文预算、真实快捷键）与两条可点的起手提示，而不是占位插画。
 - 运行中「Send」变成「Stop」，点它或关闭页面会中断模型请求与正在执行的工具，已生成的部分回答仍会写入会话。
 - 附件按钮读取文本文件（≤1 MB），以 `<file name="...">` 块附加在下一条消息里；二进制文件会被拒绝。
-- 输入框上方的「Run commands」决定本条消息能否执行 `bash`（默认开启，选择会记在浏览器里）；关闭时模型会收到「已取消」，`WEB_ALLOW_TOOLS=0` 可在服务端强制禁用。
+- 输入框上方的「Allow changes」决定本条消息能否修改文件或执行命令（默认开启，选择会记在浏览器里）；关闭时仍可读取文件、加载技能和搜索。`WEB_ALLOW_TOOLS=0` 可在服务端强制关闭修改与命令，配置的验证命令也会停用。浏览器开关不能扩大 `AGENT_CAPABILITIES` 授予的权限。
+- 外部工具可声明 `capabilities`（`fs.read` / `fs.write` / `shell` / `network` / `git.write`）；未声明时按需要全部权限处理。仅无修改副作用的工具应标记 `readOnly: true`，使同批只读调用并行；其余工具串行执行。
 - 服务默认只绑定 `127.0.0.1` 且没有登录，能打开页面的人就能让 agent 读写工作区并执行命令，不要暴露到公网。
 - 顶栏与右侧「Run status」显示 `/api/health` 返回的模型名与上下文预算。
 
@@ -203,22 +205,22 @@ npm run evolve -- --skill=skills/coding-guide/SKILL.md
 
 ```text
 sandbox/
-  types.ts          SandboxService 接口与状态类型
+  types.ts          共享接口再导出（实现位于 src/execution/types.ts）
   service.ts        生命周期状态机、绝对 TTL、端点解析
   docker-runtime.ts Docker 实现
   control-plane.ts  HTTP 控制面
   server.ts         控制面入口（默认 :8090）
-  client.ts         控制面 / execd 客户端
+  client.ts         客户端再导出（实现位于 src/execution/client.ts）
   execd/main.go     沙箱内数据面（Go，静态编译）
-  execd/Dockerfile  运行时镜像（alpine + busybox sh）
+  execd/Dockerfile  开发镜像（Node 22、Python 3、git、编译工具）
   e2e.ts            端到端示例
 ```
 
 ```sh
-npm run sandbox:image  # 构建 codingagentwitheval-sandbox:local（约 20MB）
+npm run sandbox:image  # 构建 codingagentwitheval-sandbox:local
 npm run sandbox        # 启动控制面 :8090
 npm run sandbox:e2e    # 起容器 -> 执行命令 -> 文件读写 -> 暂停/恢复 -> 删除
-npm run test:docker    # Docker 生命周期测试（daemon 未启动时自动跳过）
+npm run test:docker    # 生命周期与 Agent 主流程集成测试（需要上述镜像）
 ```
 
 | 方法 | 路径 | 说明 |
@@ -230,7 +232,26 @@ npm run test:docker    # Docker 生命周期测试（daemon 未启动时自动�
 | POST | `/sandboxes/{id}/pause` / `/resume` | 仅 Running / Paused 合法 |
 | DELETE | `/sandboxes/{id}` | 删除 |
 
-Docker 实现相对 OpenSandbox 契约的差异：TTL 由应用侧定时清理；暂停会冻结进程（端口映射保留）；没有快照、出口策略和资源配额；镜像为 `codingagentwitheval-sandbox:local`（alpine + 静态编译的 Go execd，约 20MB），命令通过 busybox `sh -c` 执行，镜像内没有 Python/Node。
+CLI、Web 和 eval 共用 `src/execution/task.ts`。默认 `AGENT_EXECUTION=local`，启用容器模式需要先构建镜像、在另一个终端运行 `npm run sandbox`，再启动主程序：
+
+```powershell
+$env:AGENT_EXECUTION = "docker"
+$env:SANDBOX_URL = "http://127.0.0.1:8090"
+npm run dev:web       # 或 npm run dev / npm run eval
+```
+
+每次任务按以下流程运行：
+
+1. 创建独立容器，将工作区源码复制到 `/workspace`；模型请求、会话数据库、长期记忆仍由宿主进程处理。
+2. `read/write/edit/glob/grep/bash` 和完成前验证都使用同一个容器；命令使用 Linux `sh`，不是宿主 PowerShell。工具原有的权限检查和确认仍然生效。
+3. 结束时将新增、修改和删除清单保存到 `data/sandbox-results/<id>/changes.json`，修改后的文件保存在同目录 `files/` 下。成功且验证通过时，确认宿主文件与任务开始时一致后应用整组改动；发现冲突则整组不应用并报错。
+4. 取消或失败只导出、不应用；`SANDBOX_APPLY_CHANGES=0` 可始终只导出。正常导出后删除容器；导出失败保留容器至 TTL，默认 30 分钟，便于恢复。
+
+源码同步使用固定排除规则，不读取 `.gitignore`：跳过 `.git`、`node_modules`、`data`、构建产物、符号链接、`.env*` 和常见私钥/数据库文件。上限为 10,000 文件、单文件 16 MiB、总量 64 MiB；排除规则无法识别任意名称的自定义敏感文件。容器没有宿主项目的可写挂载，也不接收宿主环境变量与模型密钥。依赖需在容器内安装（例如 `npm ci`），或通过 `SANDBOX_IMAGE` 指定预装依赖且包含 execd 的镜像。
+
+`load_skill` 及仅声明 `network` 能力的外部工具仍在宿主执行；其他外部工具没有适配器时会拒绝执行。Docker 或控制面不可用时直接报错，不会自动切回宿主执行。
+
+Docker 容器限制为 2 CPU、1 GiB 内存、256 进程，移除 Linux capabilities 并启用 no-new-privileges；仍允许出站网络。TTL 由控制面定时清理，暂停会冻结进程；不提供容器快照或出口策略。默认开发镜像包含 Node/Python/git；只需数据面时可自行以 `--target minimal` 构建 Alpine 镜像。
 
 ## 开发
 
@@ -249,5 +270,5 @@ npm run dev:web   # Web 入口
 - 附件只支持文本；图片、PDF 等二进制文件会被拒绝。
 - judge 单次调用约 1–2s，但每题默认 3 采样；大规模跑评测建议先用 `--judge-samples 1` 调通，再全量。
 - judge 与主模型不同家族（qwen3 vs deepseek），减少同源偏好；换 judge 模型要重跑校准。
-- 评测沙箱是目录隔离（`setWorkspaceRoot` + 路径校验），不是容器隔离；要更强的隔离用 `sandbox/`。
+- 评测默认使用目录隔离；启用 `AGENT_EXECUTION=docker` 后，Agent 工具在容器执行。L0/L1/L2 评测器仍在宿主检查回传产物，因此不应直接运行不受信任的评测断言。
 - 评测任务对 deepseek-flash 已接近全过，需要更难的 holdout 才能拉开差距。

@@ -185,6 +185,7 @@ export function globToRegExp(pattern: string): RegExp {
 /** The three small file tools used by a coding agent: read, write, and edit. */
 export const tools: Tool[] = [
   {
+    readOnly: true,
     definition: {
       name: "read",
       description: "Read a UTF-8 text file. Use offset and limit (in lines) for large files.",
@@ -283,6 +284,7 @@ export const tools: Tool[] = [
     },
   },
   {
+    readOnly: true,
     definition: {
       name: "glob",
       description: "Find files by path pattern (supports **, * and ?). Paths are relative to the searched directory.",
@@ -312,6 +314,7 @@ export const tools: Tool[] = [
     },
   },
   {
+    readOnly: true,
     definition: {
       name: "grep",
       description: "Search file contents with a JavaScript regular expression and print path:line: text. Skips binaries and dependency directories.",

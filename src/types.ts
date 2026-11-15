@@ -1,5 +1,7 @@
 export type Role = "system" | "user" | "assistant" | "tool";
 
+export type Capability = "fs.read" | "fs.write" | "shell" | "network" | "git.write";
+
 /** Token accounting reported by the provider, when it reports one. */
 export interface Usage {
   promptTokens: number;
@@ -39,6 +41,10 @@ export interface ToolContext {
 
 export interface Tool {
   definition: ToolDefinition;
+  /** Required capabilities for external tools; undeclared tools need full access. */
+  capabilities?: Capability[];
+  /** Only explicitly read-only tools may overlap other read-only calls. */
+  readOnly?: boolean;
   requiresConfirmation?: boolean;
   execute(args: unknown, context?: ToolContext): Promise<string>;
 }

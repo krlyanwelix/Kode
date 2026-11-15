@@ -114,6 +114,18 @@ test("POST /command kills the process when it times out", async (t) => {
   assert.ok(Date.now() - started < 5_000, "the command should be killed, not waited out");
 });
 
+test("disconnecting kills the command and its child processes", async (t) => {
+  const execd = requireClient(t);
+  const controller = new AbortController();
+  await assert.rejects(execd.run("(sleep 1; echo leaked > cancelled-child.txt) & echo started; wait", {
+    signal: controller.signal,
+    onEvent: (event) => { if (event.type === "stdout") controller.abort(); },
+  }));
+  // A fresh request waits beyond the child's deadline, then proves it never wrote.
+  const result = await execd.run("sleep 2; test ! -e cancelled-child.txt");
+  assert.equal(result.exitCode, 0);
+});
+
 test("files: write, read back and list the workspace", async (t) => {
   const execd = requireClient(t);
   const written = await execd.writeFile("notes/hello.txt", "written by execd\n");

@@ -12,7 +12,7 @@ import { classifyToolError } from "./harness/errors.js";
 import { describeDecision, evaluateToolCall, type PolicyOptions } from "./harness/policy.js";
 import { appendStatus, buildStatusLine } from "./harness/status.js";
 import { TraceRecorder } from "./harness/trace.js";
-import { formatVerificationFailure, runVerification, type VerifyCheck } from "./harness/verify.js";
+import { formatVerificationFailure, runVerification, type VerifyCheck, type VerifyResult } from "./harness/verify.js";
 import type { AgentEvent, Message, Model, Tool, ToolCall, ToolDefinition } from "./types.js";
 
 export interface AgentOptions {
@@ -41,6 +41,7 @@ export interface AgentOptions {
     maxAttempts?: number;
     /** Directory the checks run in. Default process.cwd(). */
     dir?: string;
+    execute?: (directory: string, checks: VerifyCheck[], signal?: AbortSignal) => Promise<VerifyResult[]>;
   };
 }
 
@@ -194,8 +195,8 @@ export class Agent {
           // "Done" is a claim. When a gate is configured, the harness checks the
           // workspace itself and sends the failures back instead of trusting it.
           const verification = this.options.verification;
-          if (verification && verification.checks.length > 0 && this.verificationAttempts < (verification.maxAttempts ?? 1)) {
-            const results = await runVerification(verification.dir ?? process.cwd(), verification.checks, signal);
+          if (verification && verification.checks.length > 0) {
+            const results = await (verification.execute ?? runVerification)(verification.dir ?? process.cwd(), verification.checks, signal);
             const failed = results.filter((result) => !result.pass);
             this.trace.record("verification", {
               turn,
@@ -203,6 +204,14 @@ export class Agent {
               failed: failed.map((result) => result.name),
             });
             if (failed.length > 0) {
+              if (this.verificationAttempts >= (verification.maxAttempts ?? 1)) {
+                const stopped: Message = { role: "assistant", content: `[harness] Verification still failed: ${failed.map((result) => result.name).join(", ")}. Changes have not been verified.` };
+                this.messages.push(stopped);
+                yield { type: "warning", message: stopped.content! };
+                yield { type: "message_end", message: stopped };
+                yield { type: "agent_end", message: stopped };
+                return;
+              }
               this.verificationAttempts += 1;
               this.messages.push({ role: "user", content: formatVerificationFailure(results) });
               yield {
@@ -223,14 +232,12 @@ export class Agent {
           return;
         }
 
-        // Announce every call first, run the approved ones at the same time, then
-        // report results in call order so the history stays deterministic.
+        // Announce calls first; only read-only calls may overlap. Results keep call order.
         for (const toolCall of calls) {
           signal?.throwIfAborted();
           yield { type: "tool_start", toolCall };
         }
         this.toolCallCount += calls.length;
-        for (const toolCall of calls) this.noteTouched(toolCall);
         this.trace.record("tool_batch", { turn, tools: calls.map((call) => call.function.name) });
         const results = await this.runToolCalls(calls, signal);
         signal?.throwIfAborted();
@@ -381,7 +388,7 @@ export class Agent {
     // Policy first: a denied call never reaches the user or the filesystem.
     for (const item of prepared) {
       if (item.kind !== "run" || !item.tool) continue;
-      const decision = evaluateToolCall(item.call.function.name, item.args, this.options.policy);
+      const decision = evaluateToolCall(item.call.function.name, item.args, this.options.policy, item.tool.capabilities);
       this.trace.record("policy", {
         tool: item.call.function.name,
         decision: decision.decision,
@@ -411,19 +418,34 @@ export class Agent {
       }
     }
 
-    const outcomes = await Promise.all(
-      prepared.map(async (item) => {
-        if (item.kind !== "run" || !item.tool) return item.value ?? "";
-        try {
-          const output = await item.tool.execute(item.args, { signal });
-          return this.truncateToolResult(output, item.call.function.name);
-        } catch (cause) {
-          if (signal?.aborted) throw cause;
-          const detail = cause instanceof Error ? cause.message : String(cause);
-          return this.truncateToolResult(`Tool error: ${detail}`, item.call.function.name);
-        }
-      }),
-    );
+    const execute = async (item: PreparedCall): Promise<string> => {
+      signal?.throwIfAborted();
+      if (item.kind !== "run" || !item.tool) return item.value ?? "";
+      try {
+        const output = await item.tool.execute(item.args, { signal });
+        this.noteTouched(item.call);
+        return this.truncateToolResult(output, item.call.function.name);
+      } catch (cause) {
+        if (signal?.aborted) throw cause;
+        const detail = cause instanceof Error ? cause.message : String(cause);
+        return this.truncateToolResult(`Tool error: ${detail}`, item.call.function.name);
+      }
+    };
+    const outcomes: string[] = [];
+    let reads: Promise<void>[] = [];
+    for (const [index, item] of prepared.entries()) {
+      if (item.kind === "result") {
+        outcomes[index] = item.value ?? "";
+      } else if (item.tool?.readOnly) {
+        reads.push(execute(item).then((result) => { outcomes[index] = result; }));
+      } else {
+        // A mutation is a barrier: finish earlier reads, then run it alone.
+        await Promise.all(reads);
+        reads = [];
+        outcomes[index] = await execute(item);
+      }
+    }
+    await Promise.all(reads);
 
     // Account in call order so hints and streaks do not depend on completion order.
     return outcomes.map((result) => this.accountToolResult(result));
