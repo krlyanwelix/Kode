@@ -4,14 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f7f6f3" />
-    <title>Agent</title>
+    <title>Kode</title>
     <link rel="icon" href="/agent-avatar.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="app-shell">
       <header class="globalbar">
-        <a class="brand" href="/" aria-label="Agent home"><span class="brand-name">Agent</span></a>
+        <a class="brand" href="/" aria-label="Kode home"><span class="brand-name">Kode</span></a>
         <div class="global-search-wrap">
           <input id="global-search" type="search" placeholder="Search sessions, messages and memories" aria-label="Search sessions, messages and memories" autocomplete="off" />
           <kbd id="search-kbd">⌘ K</kbd>
@@ -54,14 +54,14 @@
         <section id="messages" class="messages" aria-live="polite" aria-label="Conversation messages"></section>
         <button id="jump-latest" class="jump-latest" type="button" hidden>Jump to latest</button>
         <form id="composer" class="composer">
-          <textarea id="input" rows="1" placeholder="Ask Agent…" aria-label="Message Agent"></textarea>
+          <textarea id="input" rows="1" placeholder="Ask Kode…" aria-label="Message Kode"></textarea>
           <div id="attachments" class="attachments" hidden></div>
           <div class="composer-footer">
             <div class="composer-tools"><button id="attach-file" class="text-link" type="button">Attach</button><input id="attachment-input" class="sr-only" type="file" tabindex="-1" aria-hidden="true" /><label class="tool-toggle" title="Allow file changes and shell commands; turn off to keep workspace access read-only"><input id="allow-tools" type="checkbox" checked /><span>Allow changes</span></label><span class="composer-hint">Enter to send · Shift + Enter for a new line</span></div>
             <div class="composer-submit"><span class="composer-model"><span id="composer-model-name">Model</span></span><button id="stop" class="send-button stop" type="button" hidden>Stop</button><button id="send" class="send-button" type="submit">Send</button></div>
           </div>
         </form>
-        <p class="composer-disclaimer">Agent can make mistakes. Review important changes before applying them.</p>
+        <p class="composer-disclaimer">Kode can make mistakes. Review important changes before applying them.</p>
       </section>
 
       <aside class="context-sidebar" id="context-panel" aria-label="Session context">

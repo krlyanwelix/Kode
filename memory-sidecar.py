@@ -1,4 +1,4 @@
-"""Standalone long-term memory service for CodingAgentWithEval.
+"""Standalone long-term memory service for Kode.
 
 The agent talks to this process over a versioned HTTP contract and never imports
 Mem0. That boundary is the point of the refactor:
@@ -294,7 +294,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="CodingAgentWithEval Memory Service", version=SERVICE_VERSION, lifespan=lifespan)
+app = FastAPI(title="Kode Memory Service", version=SERVICE_VERSION, lifespan=lifespan)
 
 
 @app.get("/health")

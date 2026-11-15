@@ -25,7 +25,7 @@ const execFileAsync = promisify(execFile);
 export interface DockerRuntimeOptions {
   /**
    * Optional host directory with an execd binary to bind-mount at /opt/execd.
-   * The default `codingagentwitheval-sandbox:local` image already contains execd, so this
+   * The default `kode-sandbox:local` image already contains execd, so this
    * exists only for iterating on execd without rebuilding the image.
    */
   execdDir?: string;
@@ -71,7 +71,7 @@ export class DockerRuntime implements SandboxService {
   }
 
   static containerName(id: string): string {
-    return `codingagentwitheval-${id}`;
+    return `kode-${id}`;
   }
 
   async create(sandbox: PreparedSandbox): Promise<void> {
@@ -88,7 +88,7 @@ export class DockerRuntime implements SandboxService {
       "--name",
       DockerRuntime.containerName(sandbox.id),
       "--label",
-      "codingagentwitheval.sandbox=1",
+      "kode.sandbox=1",
       ...Object.entries(sandbox.labels).flatMap(([key, value]) => ["--label", `${key}=${value}`]),
       "--env",
       `EXECD_ACCESS_TOKEN=${sandbox.token}`,
@@ -152,9 +152,9 @@ export class DockerRuntime implements SandboxService {
       "ps",
       "-a",
       "--filter",
-      "label=codingagentwitheval.sandbox=1",
+      "label=kode.sandbox=1",
       "--format",
-      '{{.Label "codingagentwitheval.sandbox.id"}}',
+      '{{.Label "kode.sandbox.id"}}',
     ]);
     const ids = output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
     const sandboxes: RuntimeSandbox[] = [];

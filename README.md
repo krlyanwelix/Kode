@@ -1,6 +1,6 @@
-# CodingAgentWithEval
+# Kode
 
-一个极简的 TypeScript coding agent，只做一件事：
+Kode 是一个极简的 TypeScript coding agent，只做一件事：
 
 ```text
 用户 -> 模型 -> 工具 -> 工具结果 -> 模型 -> 回答
@@ -217,7 +217,7 @@ sandbox/
 ```
 
 ```sh
-npm run sandbox:image  # 构建 codingagentwitheval-sandbox:local
+npm run sandbox:image  # 构建 kode-sandbox:local
 npm run sandbox        # 启动控制面 :8090
 npm run sandbox:e2e    # 起容器 -> 执行命令 -> 文件读写 -> 暂停/恢复 -> 删除
 npm run test:docker    # 生命周期与 Agent 主流程集成测试（需要上述镜像）

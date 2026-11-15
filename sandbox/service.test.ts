@@ -171,10 +171,10 @@ test("list adopts workloads that exist only in the backend", async () => {
     id: "sbx-orphan",
     phase: "running",
     token: "orphan-token",
-    image: "codingagentwitheval-sandbox:local",
+    image: "kode-sandbox:local",
     labels: {
-      "codingagentwitheval.sandbox.created": String(Date.now()),
-      "codingagentwitheval.sandbox.expires": String(Date.now() + 60_000),
+      "kode.sandbox.created": String(Date.now()),
+      "kode.sandbox.expires": String(Date.now() + 60_000),
     },
   });
   try {

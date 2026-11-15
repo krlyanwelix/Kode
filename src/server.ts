@@ -309,6 +309,6 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(port, host, () => console.log(`CodingAgentWithEval web UI: http://${host}:${port}`));
+server.listen(port, host, () => console.log(`Kode web UI: http://${host}:${port}`));
 process.on("SIGINT", () => { sessionStore.close(); memory.close(); server.close(() => process.exit(0)); });
 process.on("SIGTERM", () => { sessionStore.close(); memory.close(); server.close(() => process.exit(0)); });

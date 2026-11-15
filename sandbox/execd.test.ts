@@ -3,7 +3,7 @@
  *
  * The Go execd runs inside the container — that is the shipping shape, so the
  * tests exercise exactly what the sandbox uses. Requires Docker and the
- * codingagentwitheval-sandbox:local image (`npm run sandbox:image`).
+ * kode-sandbox:local image (`npm run sandbox:image`).
  */
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
@@ -14,8 +14,8 @@ import { ExecdClient } from "./client.js";
 
 const execFileAsync = promisify(execFile);
 const token = "execd-test-token";
-const image = process.env.SANDBOX_IMAGE ?? "codingagentwitheval-sandbox:local";
-const container = `codingagentwitheval-execd-test-${process.pid}`;
+const image = process.env.SANDBOX_IMAGE ?? "kode-sandbox:local";
+const container = `kode-execd-test-${process.pid}`;
 let client: ExecdClient | undefined;
 let startFailure = "";
 

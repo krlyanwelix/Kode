@@ -13,7 +13,7 @@ const state = {
   controller: null,
   attachment: null,
   model: "",
-  allowTools: localStorage.getItem("codingagentwitheval-allow-tools") !== "0",
+  allowTools: localStorage.getItem("kode-allow-tools") !== "0",
   followTail: true,
   searchResults: null,
   searchIndex: -1,
@@ -69,7 +69,7 @@ function formatDate(value) {
 }
 
 function roleLabel(role) {
-  return role === "user" ? "You" : role === "tool" ? "Tool" : "Agent";
+  return role === "user" ? "You" : role === "tool" ? "Tool" : "Kode";
 }
 
 function preview(content) {
@@ -561,7 +561,7 @@ function showEmptyState() {
   const empty = document.createElement("div");
   empty.className = "empty-state";
   const heading = document.createElement("h1");
-  heading.textContent = "A coding agent in this workspace";
+  heading.textContent = "Kode, a coding agent in this workspace";
   const copy = document.createElement("p");
   copy.textContent = state.model
     ? `${state.model} reads files, edits them, runs commands and checks its own work before answering.`
@@ -1002,7 +1002,7 @@ function renderTree(nodes, sessionId) {
     const answer = document.createElement("div");
     answer.className = "graph-tooltip-section";
     const answerLabel = document.createElement("small");
-    answerLabel.textContent = "Agent";
+    answerLabel.textContent = "Kode";
     const answerText = document.createElement("p");
     answerText.textContent = node.assistantContent === null ? "Response pending" : preview(node.assistantContent);
     answer.append(answerLabel, answerText);
@@ -1209,11 +1209,11 @@ function exportCurrentSession() {
   const session = state.sessions.find((item) => item.id === state.sessionId);
   const transcript = nodePath(state.nodes, state.nodeId).map((node) => [
     `You: ${node.userContent || ""}`,
-    node.assistantContent ? `CodingAgentWithEval: ${node.assistantContent}` : "",
+    node.assistantContent ? `Kode: ${node.assistantContent}` : "",
   ].filter(Boolean).join("\n\n")).join("\n\n");
   const anchor = document.createElement("a");
-  anchor.href = URL.createObjectURL(new Blob([`${session ? sessionName(session) : "CodingAgentWithEval session"}\n\n${transcript}`], { type: "text/plain" }));
-  anchor.download = `${(session ? sessionName(session) : "codingagentwitheval-session").replace(/[^\p{L}\p{N}-]+/gu, "-").replace(/^-|-$/g, "") || "codingagentwitheval-session"}.txt`;
+  anchor.href = URL.createObjectURL(new Blob([`${session ? sessionName(session) : "Kode session"}\n\n${transcript}`], { type: "text/plain" }));
+  anchor.download = `${(session ? sessionName(session) : "kode-session").replace(/[^\p{L}\p{N}-]+/gu, "-").replace(/^-|-$/g, "") || "kode-session"}.txt`;
   anchor.click();
   URL.revokeObjectURL(anchor.href);
   notify("Conversation exported.");
@@ -1234,7 +1234,7 @@ function setBusy(busy) {
   $("stop").hidden = !busy;
   inputEl.setAttribute("aria-busy", String(busy));
   if (busy) setRunStatus("working", "Working", "Streaming the model response");
-  else setRunStatus("idle", "Ready to work", "Agent is available");
+  else setRunStatus("idle", "Ready to work", "Kode is available");
 }
 
 function clearAttachment() {
@@ -1410,7 +1410,7 @@ $("composer").addEventListener("submit", sendMessage);
 $("allow-tools").checked = state.allowTools;
 $("allow-tools").addEventListener("change", (event) => {
   state.allowTools = event.currentTarget.checked;
-  localStorage.setItem("codingagentwitheval-allow-tools", state.allowTools ? "1" : "0");
+  localStorage.setItem("kode-allow-tools", state.allowTools ? "1" : "0");
 });
 $("new-session").addEventListener("click", openSessionDialog);
 $("refresh").addEventListener("click", () => refreshSessions());
