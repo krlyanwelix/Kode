@@ -29,7 +29,6 @@ const sendEl = $("send");
 const memoriesEl = $("memories");
 const memoryQueryEl = $("memory-query");
 const memoryPanel = $("memory-panel");
-const memoryCountEl = $("memory-count");
 const sessionDialog = $("session-dialog");
 const sessionNameEl = $("session-name");
 const deleteSessionDialog = $("delete-session-dialog");
@@ -510,7 +509,6 @@ function renderSessions() {
 
 function renderMemories() {
   memoriesEl.replaceChildren();
-  memoryCountEl.textContent = String(state.memories.length);
   if (!state.memories.length) {
     const empty = document.createElement("div");
     empty.className = "memory-empty";
@@ -1276,6 +1274,7 @@ async function sendMessage(event) {
         nodeId: state.nodeId,
         input: outgoing,
         allowTools: state.allowTools,
+        model: state.model,
       }),
       signal: state.controller.signal,
     });
@@ -1372,7 +1371,6 @@ async function sendMessage(event) {
       if (memoryPanel.open) await loadMemories(memoryQueryEl.value.trim()).catch(() => undefined);
       else {
         state.memoriesLoaded = false;
-        memoryCountEl.textContent = "-";
       }
     }
     inputEl.focus();
@@ -1439,6 +1437,10 @@ $("drawer-scrim").addEventListener("click", () => setDrawer(false));
 $("show-tree").addEventListener("click", () => state.sessionId && openTree(state.sessionId));
 $("context-tree").addEventListener("click", () => state.sessionId && openTree(state.sessionId));
 $("export-session").addEventListener("click", () => exportCurrentSession());
+$("model-select").addEventListener("change", (event) => {
+  const value = event.target.value;
+  if (value) state.model = value;
+});
 $("stop").addEventListener("click", () => {
   if (state.controller) {
     state.controller.abort();
@@ -1465,6 +1467,24 @@ $("attachment-input").addEventListener("change", async (event) => {
   renderAttachment();
   notify(`${file.name} will be appended to your next message.`);
 });
+function fillModelSelect(options, current) {
+  const select = $("model-select");
+  if (!select) return;
+  const seen = new Set();
+  const items = [...options];
+  if (current && !items.some((option) => option.id === current)) items.unshift({ id: current, label: current });
+  select.replaceChildren();
+  for (const option of items) {
+    if (!option.id || seen.has(option.id)) continue;
+    seen.add(option.id);
+    const node = document.createElement("option");
+    node.value = option.id;
+    node.textContent = option.label || option.id;
+    select.append(node);
+  }
+  select.value = current || items[0]?.id || "";
+}
+
 function setModelLabel(model, contextLimit) {
   state.model = model || state.model;
   if (!state.model) return;
@@ -1502,6 +1522,7 @@ request("/api/health").then((health) => {
   const healthLabel = health.memoryAvailable ? "Online · memory on" : "Online · memory off";
   paintHealth(health.ok, healthLabel);
   setModelLabel(health.model, health.contextLimit);
+  if (Array.isArray(health.models)) fillModelSelect(health.models, health.model);
   if (document.querySelector(".empty-state")) showEmptyState();
 }).catch(() => {
   paintHealth(false, "Offline");
@@ -1585,7 +1606,6 @@ memoryPanel.addEventListener("toggle", async () => {
   try {
     await loadMemories(memoryQueryEl.value.trim());
   } catch (error) {
-    memoryCountEl.textContent = "!";
     memoriesEl.innerHTML = `<div class="memory-empty">Memory unavailable</div>`;
   }
 });
@@ -1601,7 +1621,6 @@ $("refresh-memories").addEventListener("click", async () => {
   try {
     await loadMemories(memoryQueryEl.value.trim());
   } catch {
-    memoryCountEl.textContent = "!";
     memoriesEl.innerHTML = `<div class="memory-empty">Memory unavailable</div>`;
   }
 });
@@ -1630,6 +1649,5 @@ inputEl.addEventListener("keydown", (event) => {
 
 refreshSessions().catch((error) => { $("session-meta").textContent = error.message; });
 loadMemories().catch(() => {
-  memoryCountEl.textContent = "!";
   memoriesEl.innerHTML = '<div class="memory-empty">Memories are unavailable right now.</div>';
 });

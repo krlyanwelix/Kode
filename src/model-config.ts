@@ -66,3 +66,24 @@ export function createModel(env: NodeJS.ProcessEnv = process.env): { model: Mode
     settings,
   };
 }
+
+export interface ModelOption {
+  id: string;
+  label: string;
+}
+
+/** `MODELS` accepts "id" or "id:Label" entries, comma separated. */
+export function parseModelOptions(raw: string | undefined): ModelOption[] {
+  const seen = new Set<string>();
+  const options: ModelOption[] = [];
+  for (const entry of String(raw ?? "").split(",")) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    const [id, ...rest] = trimmed.split(":");
+    const value = id.trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    options.push({ id: value, label: (rest.join(":").trim() || value) });
+  }
+  return options;
+}

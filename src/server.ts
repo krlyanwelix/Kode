@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { Agent } from "./agent.js";
-import { createModel, describeModel } from "./model-config.js";
+import { createModel, describeModel, parseModelOptions, type ModelOption } from "./model-config.js";
 import { tools as builtinTools } from "./tools.js";
 import { SessionStore } from "./session-store.js";
 import { createSkillLoaderTool, discoverSkills, loadExternalTools } from "./loader.js";
@@ -26,6 +26,31 @@ const { model, settings: modelSettings } = (() => {
   }
 })();
 console.log(`Using ${describeModel(modelSettings)}`);
+void discoverModels();
+
+// The picker shows what the endpoint actually serves; MODELS pins the list when
+// discovery is unavailable (offline, proxy, or a provider without /models).
+let modelOptions: ModelOption[] = parseModelOptions(process.env.MODELS);
+if (!modelOptions.length) modelOptions = [{ id: modelSettings.model, label: modelSettings.model }];
+
+async function discoverModels(): Promise<void> {
+  const pinned = parseModelOptions(process.env.MODELS);
+  if (pinned.length) return;
+  try {
+    const response = await fetch(`${modelSettings.baseUrl}/models`, {
+      headers: { authorization: `Bearer ${modelSettings.apiKey}` },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!response.ok) return;
+    const payload = (await response.json()) as { data?: Array<{ id?: unknown; name?: unknown }> };
+    const listed = (payload.data ?? [])
+      .map((entry) => ({ id: String(entry.id ?? ""), label: String(entry.name ?? entry.id ?? "") }))
+      .filter((entry) => entry.id);
+    if (listed.length) modelOptions = listed;
+  } catch {
+    // Keep the configured default; the picker still works with one entry.
+  }
+}
 
 const contextLimit = (() => {
   const value = Number.parseInt(process.env.CONTEXT_MAX_INPUT_TOKENS ?? "24000", 10);
@@ -80,11 +105,11 @@ function systemPrompt(): string {
   return buildSystemPrompt(modelSettings.model, skills);
 }
 
-function createAgent(history: Message[], allowTools: boolean, execution: TaskExecution): Agent {
+function createAgent(history: Message[], allowTools: boolean, execution: TaskExecution, runModel: typeof model = model): Agent {
   const policy = webPolicyFromEnv(allowTools);
   const verification = policy.allowedCapabilities?.includes("shell") ? verificationFromEnv() : undefined;
   return new Agent({
-    model,
+    model: runModel,
     tools: execution.tools,
     history,
     context: { maxInputTokens: contextLimit },
@@ -123,7 +148,12 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
     : undefined;
   const allowChanges = input.allowTools !== false && process.env.WEB_ALLOW_TOOLS !== "0";
   const execution = new TaskExecution(loadedTools, { allowChanges });
-  const agent = createAgent(history, allowChanges, execution);
+  const requested = typeof input.model === "string" ? input.model.trim() : "";
+  const allowed = requested && modelOptions.some((option) => option.id === requested);
+  const runModel = allowed && requested !== modelSettings.model
+    ? createModel({ ...process.env, MODEL: requested }).model
+    : model;
+  const agent = createAgent(history, allowChanges, execution, runModel);
   const turnMessages: Array<{ role: string; content: string }> = [{ role: "user", content: prompt }];
   const toolNames: string[] = [];
   const toolResults: Array<{ name: string; output: string }> = [];
@@ -189,6 +219,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
       memoryAvailable,
       memoryError,
       workspace: projectRoot,
+      models: modelOptions,
     });
     return true;
   }
@@ -226,6 +257,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
     if (!sessionStore.listNodes(forkMatch[1]).some((node) => node.id === nodeId)) throw new Error("Node does not belong to this session");
     const fork = sessionStore.forkFromNode(nodeId);
     json(res, 201, fork);
+    return true;
+  }
+  if (path === "/api/models" && req.method === "GET") {
+    json(res, 200, { models: modelOptions, current: modelSettings.model });
     return true;
   }
   if (path === "/api/chat" && req.method === "POST") {

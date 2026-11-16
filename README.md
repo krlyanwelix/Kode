@@ -48,7 +48,8 @@ MODEL=deepseek-flash
 | --- | --- | --- |
 | `OPENAI_API_KEY` | — | 必填，模型 API 密钥 |
 | `OPENAI_BASE_URL` | `https://api.deepseek.com` | 接口地址 |
-| `MODEL` | `deepseek-flash` | 模型名 |
+| `MODEL` | `deepseek-flash` | 默认模型名；对话里切换只影响当前会话 |
+| `MODELS` | — | 可选，逗号分隔的 `id` 或 `id:显示名`；不设则用服务端 `/models` 返回的列表 |
 | `MODEL_MAX_TOKENS` | `2048` | 单次回答上限 |
 | `MODEL_TEMPERATURE` | `0.3` | 越低工具调用越稳 |
 | `MODEL_TOP_P` | `0.9` | 核采样 |
