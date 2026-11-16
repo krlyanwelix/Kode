@@ -278,7 +278,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .tool-toggle:hover { background: var(--panel-soft); color: var(--text); }
 .tool-toggle input { width: 11px; height: 11px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .composer-hint { color: var(--ink-3); font-size: var(--fs-xs); min-width: 0; flex: 1 1 180px; }
-.composer-model { display: flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: var(--fs-xs); white-space: nowrap; }
 .send-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 67px; min-height: 29px; padding: 0 9px; border: 0; border-radius: 6px; background: var(--accent); color: var(--panel); font-size: var(--fs-sm); }
 .send-button[hidden] { display: none; }
 .send-button:hover { background: var(--accent-fill); }
@@ -434,9 +433,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .attachment-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); color: var(--ink-2); font-size: var(--fs-xs); }
 .attachment-remove { width: 16px; height: 16px; padding: 0; border: 0; border-radius: 3px; background: transparent; color: var(--ink-3); font-size: var(--fs-sm); line-height: 1; cursor: pointer; }
 .attachment-remove:hover { background: var(--line-soft); color: var(--ink); }
-.suggestions { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 560px; margin-top: 14px; }
-.suggestion { padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink-2); font-size: var(--fs-xs); cursor: pointer; }
-.suggestion:hover { border-color: var(--accent-hover); color: var(--accent); background: var(--panel)8f4; }
 .send-button.stop { background: var(--danger); }
 .send-button.stop:hover { background: var(--accent-hover); }
 
@@ -486,9 +482,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 /* tool output: full text on demand */
 .tool-entry-actions { display: flex; gap: 14px; padding: 4px 8px 6px; }
 /* first-run guidance */
-.empty-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; max-width: 430px; margin: 18px 0 0; text-align: left; }
-.empty-facts dt { color: var(--ink); font-size: var(--fs-xs); font-weight: 600; }
-.empty-facts dd { margin: 0; color: var(--ink-3); font-size: var(--fs-xs); }
 
 /* Path panel: each turn is a button, so the rail doubles as a turn map. */
 .path-entry-button {

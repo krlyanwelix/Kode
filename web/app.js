@@ -564,35 +564,7 @@ function showEmptyState() {
   empty.className = "empty-state";
   const heading = document.createElement("h1");
   heading.textContent = "Kode, a coding agent in this workspace";
-  const copy = document.createElement("p");
-  copy.textContent = state.model
-    ? `${state.model} reads files, edits them, runs commands and checks its own work before answering.`
-    : "Start a conversation with your agent.";
-  const facts = element("dl", "empty-facts");
-  const rows = [
-    ["Tools", "read · write · edit · glob · grep · bash"],
-    ["Context", state.contextLimit ? `${Math.round(state.contextLimit / 1000)}K tokens, compacted on overflow` : "budgeted per turn"],
-  ];
-  for (const [term, detail] of rows) {
-    facts.append(element("dt", null, term), element("dd", null, detail));
-  }
-  const suggestions = document.createElement("div");
-  suggestions.className = "suggestions";
-  const ideas = [
-    ["Find where a setting is read", "Find where the model settings are read and explain the fallback order."],
-    ["Run the tests and fix a failure", "Run the test suite, then fix the first failing test and re-run it."],
-  ];
-  for (const [label, prompt] of ideas) {
-    const chip = element("button", "suggestion", label);
-    chip.type = "button";
-    chip.addEventListener("click", () => {
-      inputEl.value = prompt;
-      inputEl.focus();
-      inputEl.dispatchEvent(new Event("input"));
-    });
-    suggestions.append(chip);
-  }
-  empty.append(heading, copy, facts, suggestions);
+  empty.append(heading);
   messagesEl.append(empty);
 }
 
@@ -1466,15 +1438,6 @@ $("mobile-nav-close").addEventListener("click", () => setDrawer(false));
 $("drawer-scrim").addEventListener("click", () => setDrawer(false));
 $("show-tree").addEventListener("click", () => state.sessionId && openTree(state.sessionId));
 $("context-tree").addEventListener("click", () => state.sessionId && openTree(state.sessionId));
-$("fork-session").addEventListener("click", async () => {
-  const latest = nodePath(state.nodes, state.nodeId).at(-1);
-  if (!state.sessionId || !latest) return notify("Send a message before creating a branch.");
-  try { await forkFromNode(state.sessionId, latest.id); notify("A new branch is ready."); }
-  catch (error) { notify(error instanceof Error ? error.message : String(error)); }
-});
-$("session-actions").addEventListener("click", (event) => {
-  if (state.sessionId) openSessionMenu(event, state.sessionId);
-});
 $("export-session").addEventListener("click", () => exportCurrentSession());
 $("stop").addEventListener("click", () => {
   if (state.controller) {
@@ -1506,7 +1469,7 @@ function setModelLabel(model, contextLimit) {
   state.model = model || state.model;
   if (!state.model) return;
   if (contextLimit) state.contextLimit = contextLimit;
-  for (const id of ["model-name", "composer-model-name", "run-model"]) {
+  for (const id of ["model-name", "run-model"]) {
     const node = $(id);
     if (node) node.textContent = state.model;
   }
