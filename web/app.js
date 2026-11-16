@@ -1536,25 +1536,21 @@ function setContextLabel() {
   context.title = `Last turn used ${state.contextUsed.toLocaleString()} prompt tokens of ${state.contextLimit.toLocaleString()}`;
 }
 request("/api/health").then((health) => {
-  $("health-dot").classList.toggle("ok", health.ok);
   const healthLabel = health.memoryAvailable ? "Online · memory on" : "Online · memory off";
-  $("health-text").textContent = healthLabel;
-  $("health-dot").setAttribute("aria-label", healthLabel);
-  $("health-dot").title = healthLabel;
+  paintHealth(health.ok, healthLabel);
   setModelLabel(health.model, health.contextLimit);
-  const workspaceEl = $("workspace-name");
-  if (workspaceEl && health.workspace) {
-    const parts = String(health.workspace).split(/[\\/]/).filter(Boolean);
-    workspaceEl.textContent = parts[parts.length - 1] || "Workspace";
-    workspaceEl.title = health.workspace;
-  }
   if (document.querySelector(".empty-state")) showEmptyState();
 }).catch(() => {
-  $("health-text").textContent = "Offline";
-  $("health-dot").classList.remove("ok");
-  $("health-dot").setAttribute("aria-label", "Offline");
-  $("health-dot").title = "Offline";
+  paintHealth(false, "Offline");
 });
+
+function paintHealth(ok, label) {
+  const dot = $("health-dot");
+  if (!dot) return;
+  dot.classList.toggle("ok", ok);
+  dot.setAttribute("aria-label", label);
+  dot.title = label;
+}
 
 function openSideGroup(group) {
   if (!group) return;

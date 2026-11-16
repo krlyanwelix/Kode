@@ -28,28 +28,29 @@ Every surface, line and ink step is a token; the dark theme redefines tokens onl
 
 | Token | Light | Dark | Use |
 | --- | --- | --- | --- |
-| `--bg` | `#f7f6f3` | `#16150f` | Page |
-| `--panel` | `#ffffff` | `#1d1c17` | Sidebar, cards, composer |
-| `--panel-soft` | `#faf9f6` | `#232119` | Hover, inset blocks |
-| `--user` | `#f4f2ee` | `#2a2721` | User message bubble |
-| `--line` | `#e8e5df` | `#37342c` | Default hairline |
-| `--line-soft` | `#efeeea` | `#2c2a23` | Section separators |
-| `--line-strong` | `#d5d1c9` | `#4a463c` | Input borders, rails |
-| `--ink` | `#23241f` | `#ece8de` | Primary text |
-| `--ink-2` | `#55564e` | `#bcb7aa` | Secondary text |
-| `--ink-3` | `#6c6d64` | `#968f81` | Metadata |
-| `--ink-4` | `#9a9b92` | `#6e6a5f` | Disabled |
-| `--accent` | `#b4552f` | `#e79a6d` | Links, focus, active marks |
-| `--accent-fill` | `#b4552f` | `#e79a6d` | Primary button fill |
-| `--accent-soft` | `#fbeee7` | `#3a271b` | Selection wash |
-| `--danger` | `#a8453a` | `#e08d80` | Errors |
-| `--danger-soft` | `#fdf1ef` | `#3a211d` | Error wash |
-| `--success` | `#3f7f5f` | `#74b795` | Online dot only |
+| `--bg` | `#fafafa` | `#111111` | Page |
+| `--panel` | `#ffffff` | `#1a1a1a` | Sidebar, cards, composer |
+| `--panel-soft` | `#fbfbfb` | `#202020` | Hover, inset blocks |
+| `--user` | `#f4f4f4` | `#262626` | User message bubble |
+| `--line` | `#e9e9e9` | `#333333` | Default hairline |
+| `--line-soft` | `#f0f0f0` | `#262626` | Section separators |
+| `--line-strong` | `#d6d6d6` | `#454545` | Input borders, rails |
+| `--ink` | `#151515` | `#f0f0f0` | Primary text |
+| `--ink-2` | `#4a4a4a` | `#bdbdbd` | Secondary text |
+| `--ink-3` | `#6b6b6b` | `#8f8f8f` | Metadata |
+| `--ink-4` | `#9b9b9b` | `#6b6b6b` | Disabled |
+| `--accent` | `#151515` | `#f0f0f0` | Links, focus, active marks |
+| `--accent-fill` | `#151515` | `#f0f0f0` | Primary button fill |
+| `--accent-soft` | `#f1f1f1` | `#2a2a2a` | Selection wash |
+| `--danger` | `#a33a3a` | `#e08d80` | Errors |
+| `--danger-soft` | `#fbf0f0` | `#3a2222` | Error wash |
+| `--success` | `#2f7a58` | `#74b795` | Online dot only |
 
 Rules that keep this honest:
 
-- **One accent.** Terracotta marks interactive and current things; nothing else uses hue.
-  Green survives only as a semantic status dot, never as decoration.
+- **One accent, and it is ink.** The palette is monochrome: the accent is the same
+  near-black as body text in light mode, and its inverse in dark mode. Hierarchy comes
+  from weight, spacing and hairlines — not from hue.
 - **Contrast floor.** Body text ≥ 6:1, metadata ≥ 5:1, large text ≥ 3:1, against the
   surface it actually sits on (measured, not assumed).
 - **No literal colors in rules.** A hex value belongs in a token definition or nowhere.
